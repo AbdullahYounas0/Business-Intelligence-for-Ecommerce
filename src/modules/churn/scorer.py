@@ -43,3 +43,30 @@ def compute_rfm(orders: list[dict]) -> list[dict]:
             "last_order_date": str(latest["created_at"])[:10],
         })
     return results
+
+
+async def get_at_risk_customers() -> list[dict]:
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        from src.ingestion.mock_data import mock_at_risk_customers
+        return mock_at_risk_customers()
+
+    from src.shared.bigquery_client import BigQueryClient
+    bq = BigQueryClient()
+    orders = bq.query(f"SELECT * FROM `{bq.table(bq.raw, 'orders')}`")
+    all_customers = compute_rfm(orders)
+    return [c for c in all_customers if c["rfm_score"] < _THRESHOLD]
+
+
+async def run_churn_job(ws_manager=None):
+    logger.info("Churn job started")
+    try:
+        customers = await get_at_risk_customers()
+        if ws_manager and customers:
+            await ws_manager.broadcast({"type": "churn_update", "count": len(customers)})
+
+        from src.delivery.slack import send, churn_blocks
+        text, blocks = churn_blocks(customers)
+        await send("SLACK_WEBHOOK_RETENTION", text, blocks)
+        logger.info(f"Churn job done — {len(customers)} at-risk customers")
+    except Exception as e:
+        logger.error(f"Churn job failed: {e}")
