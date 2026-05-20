@@ -69,3 +69,24 @@ async def reviews(page: int = 1, page_size: int = 20, sentiment: str = None):
         f"SELECT * FROM `{bq.table(bq.features, 'review_analysis')}` {where} "
         f"ORDER BY created_at DESC LIMIT {page_size} OFFSET {(page-1)*page_size}"
     )}
+
+
+@router.post("/trigger")
+async def trigger_sentiment():
+    from src.modules.sentiment.classifier import run_sentiment_job
+    await run_sentiment_job()
+    return {"triggered": True}
+
+
+@router.post("/report/generate")
+async def generate_report():
+    from src.modules.sentiment.reporter import run_weekly_narrative
+    narrative = await run_weekly_narrative()
+    return {"narrative": narrative}
+
+
+@router.get("/report")
+async def report():
+    from src.modules.sentiment.reporter import run_weekly_narrative
+    narrative = await run_weekly_narrative()
+    return {"narrative": narrative}
