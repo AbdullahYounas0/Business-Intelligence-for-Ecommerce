@@ -97,3 +97,49 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.debug("WS exception (normal on browser close): %s", type(e).__name__)
     finally:
         manager.disconnect(websocket)
+
+
+@app.get("/analytics/costs")
+async def costs():
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        from src.shared.bigquery_client import _mock_cost_audit
+        return _mock_cost_audit()
+    from src.shared.bigquery_client import BigQueryClient
+    bq = BigQueryClient()
+    return await bq.get_cost_audit()
+
+
+@app.get("/bigquery/debug")
+async def bq_debug():
+    """Shows exactly what datasets/tables/rows exist in BigQuery."""
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        return {"mode": "mock", "project": None}
+    try:
+        from src.shared.bigquery_client import BigQueryClient
+        bq = BigQueryClient()
+        project = bq.project
+        datasets = [ds.dataset_id for ds in bq.client.list_datasets()]
+        tables: dict = {}
+        for ds in [bq.raw, bq.features, bq.audit]:
+            try:
+                tbls = list(bq.client.list_tables(f"{project}.{ds}"))
+                tables[ds] = {}
+                for t in tbls:
+                    try:
+                        count = bq.query(f"SELECT COUNT(*) as n FROM `{project}.{ds}.{t.table_id}`")
+                        tables[ds][t.table_id] = count[0]["n"] if count else 0
+                    except Exception as e:
+                        tables[ds][t.table_id] = f"error: {e}"
+            except Exception as e:
+                tables[ds] = f"error listing: {e}"
+        return {
+            "project": project,
+            "datasets_in_project": datasets,
+            "configured_datasets": {
+                "raw": bq.raw, "features": bq.features, "audit": bq.audit
+            },
+            "tables_and_rows": tables,
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "detail": traceback.format_exc()}
