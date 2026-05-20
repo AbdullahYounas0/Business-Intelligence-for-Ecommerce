@@ -216,3 +216,76 @@ def mock_at_risk_customers() -> list[dict]:
     all_scores = compute_rfm(orders)
     at_risk = [c for c in all_scores if c["rfm_score"] < threshold]
     return sorted(at_risk, key=lambda x: x["rfm_score"])[:15]
+
+
+def mock_inventory_alerts() -> list[dict]:
+    alerts = []
+    products = mock_products()
+    threshold = int(__import__('os').environ.get("INVENTORY_REORDER_THRESHOLD", "10"))
+    for p in products:
+        if p["units_available"] < threshold and p["pending_orders"] > 0:
+            alerts.append({
+                "alert_id":          f"ALT-{p['product_id']}",
+                "type":              "low_stock",
+                "severity":          "high" if p["units_available"] < 5 else "medium",
+                "product_id":        p["product_id"],
+                "product_title":     p["title"],
+                "sku":               p["sku"],
+                "units_available":   p["units_available"],
+                "pending_orders":    p["pending_orders"],
+                "gpt_recommendation": f"Only {p['units_available']} units left with {p['pending_orders']} pending orders. Reorder {p['sku']} immediately.",
+                "created_at":        _ts(_NOW),
+            })
+    return alerts[:6]
+
+
+def mock_sentiment_summary() -> dict:
+    reviews = mock_reviews()
+    pos = sum(1 for r in reviews if r["rating"] >= 4)
+    neu = sum(1 for r in reviews if r["rating"] == 3)
+    neg = sum(1 for r in reviews if r["rating"] <= 2)
+    return {
+        "period": "last_7_days",
+        "total_reviews": len(reviews),
+        "breakdown": {"positive": pos, "neutral": neu, "negative": neg},
+        "by_topic": [
+            {"topic": "quality",   "positive": 42, "neutral": 8,  "negative": 5},
+            {"topic": "delivery",  "positive": 38, "neutral": 12, "negative": 9},
+            {"topic": "freshness", "positive": 45, "neutral": 6,  "negative": 4},
+            {"topic": "packaging", "positive": 40, "neutral": 9,  "negative": 2},
+            {"topic": "value",     "positive": 30, "neutral": 14, "negative": 7},
+        ],
+        "urgent_reviews": neg,
+        "narrative": (
+            "This week FlowerZone received mostly positive feedback across 200 reviews. "
+            "Freshness and packaging are top praise areas. Delivery timing is the primary complaint, "
+            "with 9 customers reporting late arrivals. 3 reviews flagged as urgent — all related to "
+            "wilting flowers on arrival and require same-day response."
+        ),
+    }
+
+
+async def seed_all() -> dict:
+    import os
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        return {"note": "No GCP project configured — mock data served from memory only"}
+
+    from src.shared.bigquery_client import BigQueryClient
+    bq = BigQueryClient()
+
+    result = bq.ensure_all_tables()
+
+    orders   = mock_orders()
+    products = mock_products()
+    reviews  = mock_reviews()
+
+    bq.insert_rows(bq.raw, "orders",   orders)
+    bq.insert_rows(bq.raw, "products", products)
+    bq.insert_rows(bq.raw, "reviews",  reviews)
+
+    return {
+        "tables_created": result["tables_ensured"],
+        "orders_seeded":  len(orders),
+        "products_seeded": len(products),
+        "reviews_seeded":  len(reviews),
+    }
