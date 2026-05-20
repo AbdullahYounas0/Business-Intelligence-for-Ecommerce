@@ -143,3 +143,20 @@ async def bq_debug():
     except Exception as e:
         import traceback
         return {"error": str(e), "detail": traceback.format_exc()}
+
+
+@app.post("/demo")
+async def seed_demo():
+    from src.ingestion.mock_data import seed_all
+    try:
+        return await seed_all()
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "detail": traceback.format_exc()}
+
+
+# ── Static frontend — must be last ───────────────────────────────────────────
+_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+if os.path.exists(_dist):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")
