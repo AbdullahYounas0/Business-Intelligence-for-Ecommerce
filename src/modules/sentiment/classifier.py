@@ -39,3 +39,26 @@ Return JSON with:
         "topics": result.get("topics", []),
         "urgent": result.get("urgent", False),
     }
+
+
+async def run_sentiment_job(ws_manager=None):
+    logger.info("Sentiment job started")
+    try:
+        reviews = await _get_unclassified_reviews()
+        for review in reviews:
+            await classify_review(review)
+    except Exception as e:
+        logger.error(f"Sentiment job failed: {e}")
+
+
+async def _get_unclassified_reviews() -> list[dict]:
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        from src.ingestion.mock_data import mock_reviews
+        return mock_reviews()[:10]
+    from src.shared.bigquery_client import BigQueryClient
+    bq = BigQueryClient()
+    return bq.query(
+        f"SELECT r.* FROM `{bq.table(bq.raw, 'reviews')}` r "
+        f"LEFT JOIN `{bq.table(bq.features, 'review_analysis')}` a USING (review_id) "
+        f"WHERE a.review_id IS NULL LIMIT 100"
+    )
