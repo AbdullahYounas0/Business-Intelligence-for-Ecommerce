@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: #04050f;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { min-height: 100vh; }
+
+/* Premium scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.6); }
+
+/* Glass card */
+.glass {
+  background: rgba(15, 18, 40, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Glow effects */
+.glow-indigo { box-shadow: 0 0 24px rgba(99,102,241,0.15); }
+.glow-red    { box-shadow: 0 0 20px rgba(239,68,68,0.15); }
+.glow-amber  { box-shadow: 0 0 20px rgba(245,158,11,0.12); }
+.glow-green  { box-shadow: 0 0 20px rgba(74,222,128,0.12); }
+
+/* Animated gradient border */
+@keyframes border-glow {
+  0%,100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+.border-pulse { animation: border-glow 3s ease-in-out infinite; }
+
+/* Ping dot */
+@keyframes live-ping {
+  0%    { transform: scale(1); opacity: 1; }
+  75%,100% { transform: scale(2); opacity: 0; }
+}
+.live-ping { animation: live-ping 1.5s cubic-bezier(0,0,0.2,1) infinite; }
+
+/* Number count-up shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, #6366f1, #a78bfa, #6366f1);
+  background-size: 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s linear infinite;
+}
