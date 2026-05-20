@@ -65,3 +65,23 @@ async def get_active_alerts() -> list[dict]:
         f"SELECT * FROM `{bq.table(bq.raw, 'orders')}` WHERE status = 'unfulfilled'"
     )
     return detect_anomalies(products, orders)
+
+
+async def run_inventory_job(ws_manager=None):
+    logger.info("Inventory job started")
+    try:
+        from src.modules.inventory.alerter import enrich_alerts
+        from src.delivery.slack import send, inventory_alert_blocks
+
+        alerts   = await get_active_alerts()
+        enriched = await enrich_alerts(alerts)
+
+        for alert in enriched:
+            if ws_manager:
+                await ws_manager.broadcast({"type": "inventory_alert", "alert": alert})
+            text, blocks = inventory_alert_blocks(alert)
+            await send("SLACK_WEBHOOK_INVENTORY", text, blocks)
+
+        logger.info(f"Inventory job done — {len(enriched)} alerts")
+    except Exception as e:
+        logger.error(f"Inventory job failed: {e}")
