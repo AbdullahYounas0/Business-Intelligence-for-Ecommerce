@@ -184,3 +184,35 @@ def mock_orders() -> list[dict]:
                 "created_at":     _days_ago(days_ago),
             })
     return orders
+
+
+def mock_reviews() -> list[dict]:
+    reviews = []
+    product_ids = [p["product_id"] for p in PRODUCTS]
+    customer_names = [c[1] for c in CUSTOMERS]
+
+    rating_weights = {5: 45, 4: 30, 3: 12, 2: 8, 1: 5}
+    ratings = list(rating_weights.keys())
+    weights = list(rating_weights.values())
+
+    for i in range(200):
+        rating = random.choices(ratings, weights=weights)[0]
+        body   = random.choice(REVIEW_BODIES[rating])
+        reviews.append({
+            "review_id":     f"REV-{i+1:04d}",
+            "product_id":    random.choice(product_ids),
+            "customer_name": random.choice(customer_names),
+            "rating":        rating,
+            "body":          body,
+            "created_at":    _days_ago(random.randint(0, 60)),
+        })
+    return reviews
+
+
+def mock_at_risk_customers() -> list[dict]:
+    orders = mock_orders()
+    from src.modules.churn.scorer import compute_rfm
+    threshold = int(__import__('os').environ.get("CHURN_RFM_THRESHOLD", "30"))
+    all_scores = compute_rfm(orders)
+    at_risk = [c for c in all_scores if c["rfm_score"] < threshold]
+    return sorted(at_risk, key=lambda x: x["rfm_score"])[:15]
