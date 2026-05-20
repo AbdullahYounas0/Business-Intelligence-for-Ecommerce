@@ -45,7 +45,27 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-app = FastAPI(title="E-Commerce Intelligence Hub")
+from contextlib import asynccontextmanager
+
+from src.modules.churn.routes import router as churn_router
+from src.modules.inventory.routes import router as inventory_router
+from src.modules.sentiment.routes import router as sentiment_router
+from src.ingestion.webhook_handler import router as ingest_router
+from src.shared.scheduler import start_scheduler, shutdown_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.ws_manager = manager
+    try:
+        start_scheduler(manager)
+    except Exception as e:
+        logger.error("Scheduler failed to start: %s", e)
+    yield
+    shutdown_scheduler()
+
+
+app = FastAPI(title="E-Commerce Intelligence Hub", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,3 +73,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(churn_router,    prefix="/churn",     tags=["Churn"])
+app.include_router(inventory_router, prefix="/inventory", tags=["Inventory"])
+app.include_router(sentiment_router, prefix="/sentiment", tags=["Sentiment"])
+app.include_router(ingest_router,   prefix="/ingest",    tags=["Ingestion"])
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "clients": len(manager._active)}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+    except Exception as e:
+        logger.debug("WS exception (normal on browser close): %s", type(e).__name__)
+    finally:
+        manager.disconnect(websocket)
